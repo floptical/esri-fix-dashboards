@@ -42,6 +42,16 @@ def main(itemid, new_datasource_itemid=None):
                 if new_datasource_itemid:
                     if key == "itemId":
                         json_obj[key] = new_datasource_itemid
+                # Safety check for specific calls to layers within a dataSource that aren't simply 0
+                # If it's not using the first layer, which is 0, then fail out.
+                # We should not modify programmatically in this case.
+                if key == 'layerId' and new_datasource_itemid:
+                    if str(value) != '0':
+                        raise Exception(f'''
+                            Found a specific layerId reference: {str(value)}!'
+                            Cannot update with new datasource itemId programmatically! Please make your itemId
+                            changes manually through assistant.esri-ps.com.
+                            ''')
 
                 # if we have a field key, then the sub value is also a dict containing info about that field.
                 if key == "field":
@@ -177,56 +187,6 @@ def main(itemid, new_datasource_itemid=None):
     # Run a second time after our found_field_names set is fully populated
     find_and_modify_field_names(parsed_json)
 
-    # Another Recursive function to simply confirm field names have been lower-cased.
-    def confirm_fields_lowercased(adict):
-        for k,v in adict.items():
-            if k == 'onStatisticField':
-                if v:
-                    print(f'{k} : {v}')
-                    print(f"Value lowercase? {v.islower()}")
-                    assert v.islower()
-            if k == 'fieldName':
-                if v:
-                    print(f'{k} : {v}')
-                    print(f"Value lowercase? {v.islower()}")
-                    assert v.islower()
-            if k == 'valueField' and str(v) != 'absoluteValue':
-                if v:
-                    print(f'{k} : {v}')
-                    print(f"Value lowercase? {v.islower()}")
-                    assert v.islower()
-            if k == 'field':
-                if v['name']:
-                    print(f'{k} : {v}')
-                    print(f"Value lowercase? {v['name'].islower()}")
-                    assert v['name'].islower()
-            # This comes in as a list even with only 1 item.
-            if k == 'groupByFields':
-                if v:
-                    print(f'{k} : {v}')
-            if k == 'orderByFields':
-                if v:
-                    print(f'{k} : {v}')
-            if k == 'valueFields':
-                if v:
-                    print(f'{k} : {v}')
-            if k == 'expression':
-                # Can't confirm this one, just print
-                if v:
-                    print(f'{k} : {v}')
-            if k == 'text':
-                # Can't confirm this one, just print
-                if v:
-                    print(f'{k} : {v}')
-            if type(v) is dict:
-                confirm_fields_lowercased(v)
-            if type(v) is list:
-                for i in v:
-                    if type(i) is dict:
-                        confirm_fields_lowercased(i)
-
-    #confirm_fields_lowercased(parsed_json)
-
 
     f = open('./new_dashboard_json.txt', "w")
     # Write with indent so it's readable while I'm spot-checking
@@ -261,5 +221,7 @@ def main(itemid, new_datasource_itemid=None):
 if __name__ == '__main__':
     itemid = 'some_dashboard_itemid'
     optional_new_datasource_itemid = 'optional_new_datasource_itemid'
-    
+
+    # Test next: CampFin_desktop_1_1 a904a53d21d24f2da1dcd27fc2caa16a
+
     main(itemid)
