@@ -200,15 +200,17 @@ def main(itemid, new_datasource_itemid=None):
 
             #print(json.dumps(response.json(), indent=2))
             if response.json()["results"][0]["type"] == 'Table' or response.json()["results"][0]["type"] == 'Feature Layer' or response.json()["results"][0]["type"] == 'Feature Service':
-                dataset_name = response.json()["results"][0]["name"]
-                # We can query for datasource json and gdet field names that way:
-                datasource_url = f'https://services.arcgis.com/{org_id}/ArcGIS/rest/services/{dataset_name}/FeatureServer/0?f=pjson&token={ago_token}'
-                response2 = requests.get(datasource_url)
-                #print(json.dumps(response2.json(), indent=2))
-                for i in response2.json()['fields']:
-                    field_name = i['name']
-                    # Add to our found_field_names set for use in our 2nd run of find_and_modify_field_names()
-                    found_field_names.add(field_name.upper())
+                # Loop through all layers
+                for layer in response.json()["results"]:
+                    dataset_name = layer["name"]
+                    # We can query for datasource json and get field names that way:
+                    datasource_url = f'https://services.arcgis.com/{org_id}/ArcGIS/rest/services/{dataset_name}/FeatureServer/0?f=pjson&token={ago_token}'
+                    response2 = requests.get(datasource_url)
+                    #print(json.dumps(response2.json(), indent=2))
+                    for i in response2.json()['fields']:
+                        field_name = i['name']
+                        # Add to our found_field_names set for use in our 2nd run of find_and_modify_field_names()
+                        found_field_names.add(field_name.upper())
 
     # first run where we get datasource itemids and field names used in the dashboard json.
     find_and_modify_field_names(parsed_json)
