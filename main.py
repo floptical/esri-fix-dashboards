@@ -43,11 +43,14 @@ def main(itemid, new_datasource_itemid=None):
                     if key == "itemId":
                         json_obj[key] = new_datasource_itemid
 
-                # This has a direct field name value, lower-case if not empty
-                if key == "onStatisticField":
-                    if value:
-                        found_field_names.add(value.upper())
-                        json_obj[key] = value.lower()
+                # if we have a field key, then the sub value is also a dict containing info about that field.
+                if key == "field":
+                    for sub_key, sub_value in value.items():
+                        # find the 'name' element which has the field name as a value.
+                        if sub_key == "name":
+                            if sub_value:
+                                found_field_names.add(sub_value.upper())
+                                json_obj[key][sub_key] = sub_value.lower()
 
                 # This has a direct field name value, lower-case if not empty
                 if key == "fieldName":
@@ -56,8 +59,28 @@ def main(itemid, new_datasource_itemid=None):
                         json_obj[key] = value.lower()
 
                 # This has a direct field name value, lower-case if not empty
+                if key == "onStatisticField":
+                    if value:
+                        found_field_names.add(value.upper())
+                        json_obj[key] = value.lower()
+
+                # This has a direct field name value, lower-case if not empty
                 if key == "valueField":
+                    # absoluteValue can sometimes be here, and is used by pie charts
                     if value and str(value) != 'absoluteValue':
+                        found_field_names.add(value.upper())
+                        json_obj[key] = value.lower()
+
+                # fieldMap maps fields to another, which contain sourceName and targetName
+                # Direct field name value in that case
+                if key == "sourceName":
+                    # absoluteValue can sometimes be here, and is used by pie charts
+                    if value:
+                        found_field_names.add(value.upper())
+                        json_obj[key] = value.lower()
+                if key == "targetName":
+                    # absoluteValue can sometimes be here, and is used by pie charts
+                    if value:
                         found_field_names.add(value.upper())
                         json_obj[key] = value.lower()
 
@@ -103,14 +126,21 @@ def main(itemid, new_datasource_itemid=None):
                         else:
                             json_obj[key] = value.lower()
 
-                # if we have a field key, then the sub value is also a dict containing info about that field.
-                if key == "field":
-                    for sub_key, sub_value in value.items():
-                        # find the 'name' element which has the field name as a value.
-                        if sub_key == "name":
-                            if sub_value:
-                                found_field_names.add(sub_value.upper())
-                                json_obj[key][sub_key] = sub_value.lower()
+                # seriesOrderByFields is a list containing values like this: "FIELD ASC"
+                if key == 'seriesOrderByFields':
+                    if value:
+                        if type(value) is list:
+                            newGroupList = []
+                            for i in value:
+                                # Split by space, then rejoin once we lowercase the field name
+                                isplit = i.split(' ')
+                                found_field_names.add(isplit[0].upper())
+                                isplit[0] = isplit[0].lower()
+                                joined = ' '.join(isplit)
+                                newGroupList.append(joined)
+                            json_obj[key] = newGroupList
+                        else:
+                            json_obj[key] = value.lower()
 
                 if key == "text":
                     # Use found_field_names set to replace field name strings with the lower_case version.
@@ -142,6 +172,7 @@ def main(itemid, new_datasource_itemid=None):
 
 
     find_and_modify_field_names(parsed_json)
+
     print(set(found_field_names))
     # Run a second time after our found_field_names set is fully populated
     find_and_modify_field_names(parsed_json)
