@@ -226,9 +226,9 @@ def main(itemid, new_datasource_itemid=None):
     print(response.text)
     assert response.status_code == 200
 
-g
+
 if __name__ == '__main__':
     itemid = 'some_dashboard_itemid'
-    new_datasource_itemid = 'optional_new_datasource_itemid'
-
+    optional_new_datasource_itemid = 'optional_new_datasource_itemid'
+    
     main(itemid)
