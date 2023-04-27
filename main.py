@@ -5,11 +5,15 @@ import re
 import urllib.parse
 
 
-def main(itemid, new_datasource_itemid=None):
+def main(itemid, expected_datasource_ids, new_datasource_itemid=None):
     """Takes a dashboard of {itemid}, gets it's JSON, finds field names and makes them lower-case,
     then posts it back to AGO.
     Optionally takes a new itemid for a new datasource, and updates it in-line as well. Likely of limited use
     since dashboards can have multiple datasources."""
+
+    if new_datasource_itemid and len(expected_datasource_ids) > 1:
+        print('Not changing out datasource itemids since we expect there to be more than 1 in the dashboard.')
+        new_datasource_itemid = None
 
     token_url = 'https://arcgis.com/sharing/rest/generateToken'
     data = {'username': 'ago-user',
@@ -44,26 +48,38 @@ def main(itemid, new_datasource_itemid=None):
         if isinstance(json_obj, dict):
             for key, value in json_obj.items():
                 if key == "dataSource":
-                    if json_obj["dataSource"]["type"] == 'itemDataSource':
-                        found_datasource_itemids.add(json_obj["dataSource"]["itemId"])
-                    if json_obj["dataSource"]["layerId"] == 0 and new_datasource_itemid:
-                        json_obj["dataSource"]["itemId"] = new_datasource_itemid
-                    elif json_obj["dataSource"]["layerId"] != 0 and found_datasource_itemids:
-                        # Safety check for specific calls to layers within a dataSource that aren't simply 0
-                        # If it's not using the first layer, which is 0, then fail out.
-                        # We should not modify programmatically in this case.
-                        raise Exception(f'''
-                                Found a specific layerId reference: {str(value)}!'
-                                Cannot update with new datasource itemId programmatically! Please make your itemId
-                                changes manually through assistant.esri-ps.com.
-                                ''')
+                    if 'itemId' in json_obj["dataSource"].keys():
+                        if json_obj["dataSource"]["type"] == 'itemDataSource':
+                            found_datasource_itemids.add(json_obj["dataSource"]["itemId"])
+                        if json_obj["dataSource"]["layerId"] == 0 and new_datasource_itemid:
+                            json_obj["dataSource"]["itemId"] = new_datasource_itemid
+                        elif json_obj["dataSource"]["layerId"] != 0 and found_datasource_itemids:
+                            # Safety check for specific calls to layers within a dataSource that aren't simply 0
+                            # If it's not using the first layer, which is 0, then fail out.
+                            # We should not modify programmatically in this case.
+                            raise Exception(f'''
+                                    Found a specific layerId reference: {str(value)}!'
+                                    Cannot update with new datasource itemId programmatically! Please make your itemId
+                                    changes manually through assistant.esri-ps.com.
+                                    ''')
+
+                # Reference this dashboard to figure this out: 32fc0cb303f547ce89a906a6c743b13b
+                if key == 'operationalLayers':
+                    if json_obj['operationalLayers']['layerType'] == 'ArcGISFeatureLayer':
+                        found_datasource_itemids.add(json_obj['layerType']["itemId"])
 
                 # if we have a field key, then the sub value is also a dict containing info about that field.
+                # Edit: in some dashboards, it can apparently be a direct value
                 if key == "field":
-                    if json_obj["field"]["name"]:
+                    # If it's a dict, access the "name" key underneath it.
+                    if type(json_obj["field"]) is dict:
                         field_name = json_obj["field"]["name"]
                         found_field_names.add(field_name.upper())
                         json_obj["field"]["name"] = field_name.lower()
+                    # if it's a direct value instead of a dict, access value directly.
+                    if type(json_obj["field"]) is str:
+                        found_field_names.add(value.upper())
+                        json_obj[key] = value.lower()
 
                 # This has a direct field name value, lower-case if not empty
                 if key == "fieldName":
@@ -159,13 +175,13 @@ def main(itemid, new_datasource_itemid=None):
                     # Use found_field_names set to replace field name strings with the lower_case version.
                     # NOTE: need to grab field names from source layers, we won't always find field names elsewhere.
                     if value:
-                        for i in found_field_names:
+                        for f in found_field_names:
                             # Using regex, find all 'i' strings, and then substitute out a lower-case version
                             # ignore case otherwise several similar field names will result in inconsistent case.
                             # Also all we care about in "text" fields are field names surrounded by curly braces,
                             # so only search and replace for that
-                            pattern = re.compile('{' + i + '}', re.IGNORECASE)
-                            value = pattern.sub('{' + i.lower() + '}', value)
+                            pattern = re.compile('{' + f + '}', re.IGNORECASE)
+                            value = pattern.sub('{' + f.lower() + '}', value)
                         json_obj[key] = value
 
                 if key == 'expression':
@@ -177,6 +193,18 @@ def main(itemid, new_datasource_itemid=None):
                             pattern = re.compile(i, re.IGNORECASE)
                             value = pattern.sub(i.lower(), value)
                         json_obj[key] = value
+
+                # example: cdb54ca79c94440aba9eb63a7999b206
+                # TODO: THIS NEEDS TESTING
+                if key == 'labelExpressionInfo':
+                    sub_value = json_obj['labelExpressionInfo']['value']
+                    # Using regex, find all 'i' strings, and then substitute out a lower-case version
+                    # ignore case otherwise several similar field names will result in inconsistent case.
+                    for f in found_field_names:
+                        pattern = re.compile(f, re.IGNORECASE)
+                        sub_value = pattern.sub(f.lower(), sub_value)
+                    json_obj['labelExpressionInfo']['value'] = sub_value
+
 
                 else:
                     # Continue recursion on value to keep going down the JSON tree
@@ -216,6 +244,9 @@ def main(itemid, new_datasource_itemid=None):
     find_and_modify_field_names(parsed_json)
 
     print(f'found_datasource_itemids: {found_datasource_itemids}')
+    # This is a safety measure in case we didn't account for all datasets informing a dashboard.
+    print('Asserting our expected datasource ids our as we expect them in the datasource.')
+    assert set(expected_datasource_ids) == found_datasource_itemids
     gather_datasource_field_names()
     print(f'found_field_names: {found_field_names}')
 
@@ -257,4 +288,7 @@ if __name__ == '__main__':
     itemid = 'some_dashboard_itemid'
     #optional_new_datasource_itemid = 'optional_new_datasource_itemid'
 
-    main(itemid)
+    #TODO: make this work
+    expected_datasource_ids = ['one_itemid', 'two_itemid']
+
+    main(itemid=itemid, expected_datasource_ids=expected_datasource_ids)
