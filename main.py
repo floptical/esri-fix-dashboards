@@ -24,12 +24,12 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
     Optionally takes a new itemid for a new datasource, and updates it in-line as well. Likely of limited use
     since dashboards can have multiple datasources."""
 
-    expected_datasource_itemids = expected_datasource_itemids.split(',')
-
     if not expected_datasource_itemids:
         raise AssertionError('No "expected_datasource_ids" var passed! You should know what data sources a dashboard \
         is using before attempting a large modification like this, Because if you dont update all the data sources to\
-        have lower-case field names, it will break.')
+        have lower-case field names, it will break!')
+    else:
+        expected_datasource_itemids = expected_datasource_itemids.split(',')
 
     if new_datasource_itemid and len(expected_datasource_itemids) > 1:
         print('Not changing out datasource itemids since we expect there to be more than 1 in the dashboard.')
