@@ -2,10 +2,14 @@
 
 This script is intended to be used for Oracle to PostgreSQL datasource migrations. When you overwrite a datasource
 originally published from Oracle, all the field names will change from upper-case to lower-case. This breaks
-AGO dashboards in strange ways, but if you modify the field names to lower-case, it un-breaks them.
+AGO dashboards in strange ways, but if you modify all field name references to lower-case, it un-breaks them.
 
 To use this script, point it at an AGO dashboard's itemid to run through it and change all found field names from
-upper-case to lower-case. Also know all data sources used first and put them in the var "expected_datasource_ids".
+upper-case to lower-case.
+
+Also note that you should know all data sources used in a dashboard first (because you already updated those
+datasources from  a postgres overwrite right?) and put them in the var "expected_datasource_ids"
+as a comma-separated list.
 
 Example usage:
 
