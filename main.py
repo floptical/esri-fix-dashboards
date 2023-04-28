@@ -281,6 +281,8 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
     find_and_modify_field_names(parsed_json)
 
     print(f'\nfound_datasource_itemids: {found_datasource_itemids}')
+    if not found_datasource_itemids:
+        raise AssertionError('No found datasources? If this dashboard has none it doesnt need this script!')
     # This is a safety measure in case we didn't account for all datasets informing a dashboard.
     print('Asserting our expected datasource ids are as we expect them in the datasource..')
     assert set(expected_datasource_itemids) == found_datasource_itemids
