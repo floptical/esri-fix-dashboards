@@ -43,6 +43,16 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
     ago_token = requests.post(token_url, data).json()['token']
 
     # Request the "data" json which contains field names and actual meat of the dashboard
+    description_url = f'https://www.arcgis.com/sharing/rest/content/items/{target_dashboard_itemid}/description'
+    params = {
+        'f': 'json',
+        'token': ago_token
+    }
+    response = requests.get(description_url, params=params)
+    dashboard_title = response.json()["title"]
+    print(f'\nOperating on dashboard: "{dashboard_title}"\n')
+
+    # Request the "data" json which contains field names and actual meat of the dashboard
     data_url = f'https://www.arcgis.com/sharing/rest/content/items/{target_dashboard_itemid}/data'
     params = {
         'f': 'json',
@@ -133,12 +143,10 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
                 # fieldMap maps fields to another, which contain sourceName and targetName
                 # Direct field name value in that case
                 if key == "sourceName":
-                    # absoluteValue can sometimes be here, and is used by pie charts
                     if value:
                         found_field_names.add(value.upper())
                         json_obj[key] = value.lower()
                 if key == "targetName":
-                    # absoluteValue can sometimes be here, and is used by pie charts
                     if value:
                         found_field_names.add(value.upper())
                         json_obj[key] = value.lower()
@@ -206,7 +214,7 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
                     # NOTE: need to grab field names from source layers, we won't always find field names elsewhere.
                     if value:
                         for f in found_field_names:
-                            # Using regex, find all 'i' strings, and then substitute out a lower-case version
+                            # Using regex, find all 'f' strings, and then substitute out a lower-case version
                             # ignore case otherwise several similar field names will result in inconsistent case.
                             # Also all we care about in "text" fields are field names surrounded by curly braces,
                             # so only search and replace for that
@@ -217,11 +225,11 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
                 if key == 'expression':
                     # Use found_field_names set to replace field name strings with the lower_case version.
                     if value:
-                        for i in found_field_names:
+                        for f in found_field_names:
                             # Using regex, find all 'i' strings, and then substitute out a lower-case version
                             # ignore case otherwise several similar field names will result in inconsistent case.
-                            pattern = re.compile(i, re.IGNORECASE)
-                            value = pattern.sub(i.lower(), value)
+                            pattern = re.compile(f, re.IGNORECASE)
+                            value = pattern.sub(f.lower(), value)
                         json_obj[key] = value
 
                 # Seems to be web-map specific but could be used in dashboards?
@@ -252,8 +260,7 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
             search_url = 'https://www.arcgis.com/sharing/rest/search'
             params = {'f': 'json',
                       'q': i,
-                      'token': ago_token
-                      }
+                      'token': ago_token }
             print(f'\nSearching our datasource IDs with {search_url}')
             response = requests.get(search_url, params=params)
 
@@ -264,27 +271,30 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
                     # if we got multiple hits somehow (why esri), then confirm itemid matches
                     if layer["id"] == i:
                         dataset_name = layer["name"]
+                        print(f"{i}'s name in AGO is: {layer['name']}")
                     else:
                         print(f'Ignoring bad match {layer["url"]}')
                         continue
                     # We can query for datasource json and get field names that way:
-                    datasource_url = f'https://services.arcgis.com/{org_id}/ArcGIS/rest/services/{dataset_name}/FeatureServer/0?f=pjson&token={ago_token}'
-                    print(datasource_url)
-                    response2 = requests.get(datasource_url)
+                    params = {'f': 'json',
+                              'token': ago_token }
+                    datasource_url = f'https://services.arcgis.com/{org_id}/ArcGIS/rest/services/{dataset_name}/FeatureServer/0'
+                    print("\n" + datasource_url)
+                    response2 = requests.get(datasource_url, params=params)
                     #print(json.dumps(response2.json(), indent=2))
                     for i in response2.json()['fields']:
                         field_name = i['name']
                         # Add to our found_field_names set for use in our 2nd run of find_and_modify_field_names()
                         found_field_names.add(field_name.upper())
 
-    # first run where we get datasource itemids and field names used in the dashboard json.
+    # first run, where we get datasource itemids and field names used in the dashboard json.
     find_and_modify_field_names(parsed_json)
 
     print(f'\nfound_datasource_itemids: {found_datasource_itemids}')
     if not found_datasource_itemids:
         raise AssertionError('No found datasources? If this dashboard has none it doesnt need this script!')
     # This is a safety measure in case we didn't account for all datasets informing a dashboard.
-    print('Asserting our expected datasource ids are as we expect them in the datasource..')
+    print('Asserting our expected datasource ids are in the dashboard..')
     assert set(expected_datasource_itemids) == found_datasource_itemids
     gather_datasource_field_names()
     print(f'\nfound_field_names: {found_field_names}')
@@ -325,6 +335,7 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
         response = requests.post(update_url, headers=headers, data=encoded_form_data)
         print(response.text)
         assert response.status_code == 200
+    print('Done.')
 
 
 if __name__ == '__main__':
