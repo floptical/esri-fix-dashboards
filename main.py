@@ -220,7 +220,10 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
                             # so only search and replace for that
                             pattern = re.compile('{' + f + '}', re.IGNORECASE)
                             value = pattern.sub('{' + f.lower() + '}', value)
-                        json_obj[key] = value
+                            # Also look any values that begin with "{field/":
+                            pattern = re.compile(r'{field/([^}]+)}', re.IGNORECASE)
+                            value = pattern.sub(lambda match: '{field/' + match.group(1).lower() + '}', value)
+                            json_obj[key] = value
 
                 if key == 'expression':
                     # Use found_field_names set to replace field name strings with the lower_case version.
