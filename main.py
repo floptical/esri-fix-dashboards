@@ -225,6 +225,24 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, expected_datas
                             value = pattern.sub(lambda match: '{field/' + match.group(1).lower() + '}', value)
                             json_obj[key] = value
 
+                if key == 'x':
+                    if value:
+                        for f in found_field_names:
+                            # Using regex, find all 'f' strings, and then substitute out a lower-case version
+                            # ignore case otherwise several similar field names will result in inconsistent case.
+                            pattern = re.compile(f, re.IGNORECASE)
+                            value = pattern.sub(f.lower(), value)
+                        json_obj[key] = value
+
+                if key == 'field1':
+                    if value:
+                        for f in found_field_names:
+                            # Using regex, find all 'f' strings, and then substitute out a lower-case version
+                            # ignore case otherwise several similar field names will result in inconsistent case.
+                            pattern = re.compile(f, re.IGNORECASE)
+                            value = pattern.sub(f.lower(), value)
+                        json_obj[key] = value
+
                 if key == 'expression':
                     # Use found_field_names set to replace field name strings with the lower_case version.
                     if value:
