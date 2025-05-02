@@ -113,13 +113,13 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
                 search_and_modify(item)
 
     def find_and_process_structure(structure):
-        """Find JSON structures that have our data source itemID in a key called "itemDataSource" or "arcadeDataSource" at the top level.
+        """Find JSON structures that have our data source itemID in a key called "itemDataSource" or "arcadeDataSource" or "itemid" at the top level.
         When we find them, only then do we recursively crawl through that JSON structure and attempt to lower-case found field names."""
 
         if isinstance(structure, dict):
             # Analyze arcadeDataSourceItems for script key, and try to find our datasource itemid in it.
             # Also make sure there aren't other item datasources, otherwise you should modify this dashboard by hand.
-            if ('arcadeDataSourceItems' in structure):
+            if 'arcadeDataSourceItems' in structure:
                 found_itemids = set()
                 # Look for hexadecimal values with a length of 32 in the script (itemids)
                 regex = re.compile(r'([0-9a-fA-F]{32})')
@@ -140,7 +140,7 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
                             print(f'Found arcadeDataSource itemId {arcadeSource["itemId"]}!\n')
 
             # now modify the "script" key itself if we're sure it references only our source itemid
-            if ('arcadeDataSourceItems' in structure):
+            if 'arcadeDataSourceItems' in structure:
                 for arcadeSource in structure["arcadeDataSourceItems"]:
                     if arcadeSource['itemId'] in valid_arcade_datasource_ids:
                         #print(f'Modifying arcadeDataSource script for {arcadeSource["itemId"]}!\n')
@@ -149,6 +149,9 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
                         #print(arcadeSource['script'])
 
             # Loop through and identify structures we can modify
+            if 'itemId' in structure and structure['itemId'] == target_itemid:
+                print('Found matching itemId, modifying it.')
+                search_and_modify(structure)
             if (
                 'dataSource' in structure and
                 isinstance(structure['dataSource'], dict) and
