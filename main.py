@@ -77,7 +77,7 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
     keys_to_check = [
         'field', 'x', 'field1', 'field2', 'fieldName', 'text', 
         'onStatisticField', 'absoluteValue', 'name',
-        'expression', "sourceName", "targetName", "valueField"
+        'expression', "sourceName", "targetName", "valueField", "definitionExpression"
     ]
     special_list_keys = [
         'orderByFields', 'seriesOrderByFields', "valueFields"
@@ -153,12 +153,21 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
                 print('Found matching itemId, modifying it.')
                 search_and_modify(structure)
             if (
+                'datasets' in structure and
+                len(structure['datasets']) == 1 and
+                isinstance(structure['datasets'], list) 
+            ):
+                if structure['datasets'][0]["dataSource"] and 'itemId' in structure['datasets'][0]["dataSource"].keys():
+                    if structure['datasets'][0]["dataSource"]['itemId'] == target_itemid:
+                        print('Found "datasets" struct, modifying it.')
+                        search_and_modify(structure)
+            if (
                 'dataSource' in structure and
                 isinstance(structure['dataSource'], dict) and
                 structure['dataSource'].get('type') == 'itemDataSource' and
                 structure['dataSource'].get('itemId') == target_itemid
             ):
-                print('Found itemDataSource, modifying it.')
+                print('Found "itemDataSource" struct, modifying it.')
                 search_and_modify(structure)
             elif (
                 'dataSource' in structure and
@@ -166,7 +175,7 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
                 structure['dataSource'].get('type') == 'arcadeDataSource' and
                 structure['dataSource'].get('itemId') in valid_arcade_datasource_ids
             ):
-                print('Found arcadeDataSource, modifying it.')
+                print('Found "arcadeDataSource" struct, modifying it.')
                 search_and_modify(structure)
             else:
                 for value in structure.values():
@@ -206,7 +215,10 @@ def update_dashboard(token, dashboard_itemid, updated_json):
         response = requests.post(update_url, headers=headers, data=encoded_form_data)
         print(response.text)
         assert response.status_code == 200
-        print('Dashboard successfully updated.')
+        if 'success' in response.text:
+            print('Dashboard successfully updated.')
+        else:
+            print('Failure???')
 
 @click.command()
 @click.option('--ago-user', required=True, help="ArcGIS Online username.")
