@@ -37,9 +37,9 @@ def save_json(data, file_path):
     with open(file_path, 'w') as file:
         json.dump(data, file, indent=4)
 
-def get_field_names_from_arcgis(itemid, ago_rest_name, token, org):
+def get_field_names_from_arcgis(itemid, layer_num, ago_rest_name, token, org):
     #url = f"https://www.arcgis.com/sharing/rest/content/items/{itemid}/data"
-    url = f"https://services.arcgis.com/{org}/ArcGIS/rest/services/{ago_rest_name}/FeatureServer/0"
+    url = f"https://services.arcgis.com/{org}/ArcGIS/rest/services/{ago_rest_name}/FeatureServer/{layer_num}"
     print(f'Attempting to get fields from {url}')
     params = {'token': token, 'f': 'pjson'}
     response = requests.get(url, params=params)
@@ -58,8 +58,8 @@ def get_field_names_from_arcgis(itemid, ago_rest_name, token, org):
             if field in field_names:
                 field_names.remove(field)
 
-
-        assert field_names
+        if not field_names:
+            raise ValueError(f"No field names found in the response: {response.text}, are you using the correct layer number?")
         return field_names
     else:
         raise Exception(f"Failed to fetch field names for itemId {itemid}: {response.text}")
@@ -96,13 +96,13 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
                 elif key in keys_to_check and value:
                     #print(f'\n(1)Checking {sub_structure[key]} in key {key}')
                     # Use regex to modify only text in the string that is the field name.
-                    sub_structure[key] = field_pattern.sub(lambda match: match.group(0).lower(), value)
+                    sub_structure[key] = field_pattern.sub(lambda match: next(field for field in field_names if field.lower() == match.group(0).lower()), value)
                     #print(sub_structure[key])
                 elif key in special_list_keys and isinstance(value, list):
                     # Modify strings in lists under special_list_keys
                     #print(f'\n(2)Checking {sub_structure[key]} in key {key}')
                     sub_structure[key] = [
-                        field_pattern.sub(lambda match: match.group(0).lower(), v) if isinstance(v, str) else v
+                        field_pattern.sub(lambda match: next(field for field in field_names if field.lower() == match.group(0).lower()), value) if isinstance(v, str) else v
                         for v in value
                     ]
                     #print(sub_structure[key])
@@ -220,16 +220,46 @@ def update_dashboard(token, dashboard_itemid, updated_json):
         else:
             print('Failure???')
 
+
+def get_item_owner(base_url, token, item_id):
+    url = f"{base_url}/content/items/{item_id}"
+    params = {
+        "f": "json",
+        "token": token
+    }
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    item_info = response.json()
+    return item_info.get("owner")
+
+
+def transfer_ownership(base_url, token, item_id, current_owner, new_owner):
+    url = f"{base_url}/content/users/{current_owner}/items/{item_id}/reassign"
+    data = {
+        "targetUsername": new_owner,
+        "f": "json",
+        "token": token
+    }
+    response = requests.post(url, data=data)
+    response.raise_for_status()
+    result = response.json()
+    if "success" in result and result["success"]:
+        print(f"Ownership of item {item_id} successfully transferred to {new_owner}")
+    else:
+        print(f"Failed to transfer ownership: {result}")
+
+
 @click.command()
 @click.option('--ago-user', required=True, help="ArcGIS Online username.")
 @click.option('--ago-password', required=True, help="ArcGIS Online password.")
 @click.option('--org-id', required=True, help="ArcGIS Online organization ID.")
 @click.option('--target-dashboard-itemid', required=True, help="The item ID of the dashboard to modify.")
 @click.option('--target-datasource-itemid', required=True, help="The item ID of the datasource to target.")
+@click.option('--target-datasource-layer-num', required=False, default=0, help="The layer number of the datasource, usuall 0 but can differ sometimes from publishing wackiness.")
 @click.option('--target-datasource-rest-name', required=True, help="It's REST name so we can get the field names.")
 @click.option('--unsafe-mode', is_flag=True, help="Don't use safety checks such as making sure top level of a key has proper datasource.")
 @click.option('--dry-run', is_flag=True, help="Perform a dry run without uploading changes.")
-def main(ago_user, ago_password, org_id, target_dashboard_itemid, target_datasource_itemid, target_datasource_rest_name, unsafe_mode, dry_run):
+def main(ago_user, ago_password, org_id, target_dashboard_itemid, target_datasource_itemid, target_datasource_layer_num, target_datasource_rest_name, unsafe_mode, dry_run):
     """Main function to modify dashboard JSON and update it on ArcGIS Online.
     Will look for the target data source itemId in the JSON and lowercase all field names for that source only.
     Should do this safely as we very specifically target only certain keys that should containe field references.
@@ -237,8 +267,16 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, target_datasou
 
     token = generate_token(ago_user, ago_password, org_id)
 
-        # Fetch field names for the target itemId
-    field_names = get_field_names_from_arcgis(target_datasource_itemid, target_datasource_rest_name, token, org_id)
+    og_owner = get_item_owner("https://www.arcgis.com/sharing/rest", token, target_dashboard_itemid)
+    if og_owner != ago_user:
+        print(f'\nOwner of {target_dashboard_itemid} is {og_owner}, will attempt to swap ownership if not using --dry-run.\n')
+    if not og_owner:
+        print(f'Couldn\'t grab the owner of {target_dashboard_itemid}, exiting...')
+    if og_owner == 'None':
+        print(f'Couldn\'t grab the owner of {target_dashboard_itemid}, exiting...')
+
+    # Fetch field names for the target itemId
+    field_names = get_field_names_from_arcgis(target_datasource_itemid, target_datasource_layer_num, target_datasource_rest_name, token, org_id)
     print(f'\n{field_names}\n')
 
     # Get the dashboard JSON data
@@ -269,7 +307,12 @@ def main(ago_user, ago_password, org_id, target_dashboard_itemid, target_datasou
             print("Dry run complete. Modified JSON saved locally.")
         else:
             # Update dashboard on ArcGIS Online
+            if og_owner != ago_user:
+                print(f'You do not own {target_dashboard_itemid}, attempting to transfer ownership to you.')
+                transfer_ownership("https://www.arcgis.com/sharing/rest", token, target_dashboard_itemid, current_owner=og_owner, new_owner=ago_user)
             response = update_dashboard(token, target_dashboard_itemid, modified_json)
+            if og_owner != ago_user:
+                transfer_ownership("https://www.arcgis.com/sharing/rest", token, target_dashboard_itemid, current_owner=ago_user, new_owner=og_owner)
 
 if __name__ == "__main__":
     main()
