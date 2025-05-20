@@ -77,7 +77,7 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
     keys_to_check = [
         'field', 'x', 'field1', 'field2', 'fieldName', 'text', 
         'onStatisticField', 'absoluteValue', 'name',
-        'expression', "sourceName", "targetName", "valueField", "definitionExpression"
+        'expression', "sourceName", "targetName", "valueField", "definitionExpression", "title"
     ]
     special_list_keys = [
         'orderByFields', 'seriesOrderByFields', "valueFields"
