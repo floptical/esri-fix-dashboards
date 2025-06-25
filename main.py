@@ -49,6 +49,9 @@ def get_field_names_from_arcgis(itemid, layer_num, ago_rest_name, token, org):
             metadata = response.json()
         except requests.exceptions.JSONDecodeError:
             raise ValueError(f"Failed to parse JSON response: {response.text}")
+        # First make sure the itemid of the rest item we pulled fields from matches the expected datasource itemid.
+        assert metadata.get('serviceItemId') == itemid, f"Item ID mismatch: expected {itemid}, got {metadata.get('serviceItemId')}. Did you pass the correct --target-datasource-rest-name that matches the datasource itemid??"
+
         # Initialize an empty list to hold field names
         field_names = [f['name'] for f in metadata.get('fields', []) if f.get('name')]
 
@@ -77,7 +80,8 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
     keys_to_check = [
         'field', 'x', 'field1', 'field2', 'fieldName', 'text', 
         'onStatisticField', 'absoluteValue', 'name',
-        'expression', "sourceName", "targetName", "valueField", "definitionExpression", "title"
+        'expression', "sourceName", "targetName", "valueField",
+        "definitionExpression", "title", "labelExpression"
     ]
     special_list_keys = [
         'orderByFields', 'seriesOrderByFields', "valueFields"
@@ -99,10 +103,14 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
                     sub_structure[key] = field_pattern.sub(lambda match: next(field for field in field_names if field.lower() == match.group(0).lower()), value)
                     #print(sub_structure[key])
                 elif key in special_list_keys and isinstance(value, list):
+                    print(key)
+                    print(special_list_keys)
+                    print(value)
                     # Modify strings in lists under special_list_keys
                     #print(f'\n(2)Checking {sub_structure[key]} in key {key}')
                     sub_structure[key] = [
-                        field_pattern.sub(lambda match: next(field for field in field_names if field.lower() == match.group(0).lower()), value) if isinstance(v, str) else v
+                        field_pattern.sub(lambda match: next(field for field in field_names if field.lower() == match.group(0).lower()), v)
+                        if isinstance(v, str) else v
                         for v in value
                     ]
                     #print(sub_structure[key])
