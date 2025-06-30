@@ -81,7 +81,7 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
         'field', 'x', 'field1', 'field2', 'fieldName', 'text', 
         'onStatisticField', 'absoluteValue', 'name',
         'expression', "sourceName", "targetName", "valueField",
-        "definitionExpression", "title", "labelExpression"
+        "definitionExpression", "title", "labelExpression", "groupByFields"
     ]
     special_list_keys = [
         'orderByFields', 'seriesOrderByFields', "valueFields"
@@ -89,6 +89,22 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
 
     # List to store valid arcade data source IDs that we identify as referencing our feature class itemid only.
     valid_arcade_datasource_ids = []
+
+    # Function to handle replace field names in a string or list of strings
+    def find_replace_directly(value, field_pattern, field_names):
+        def find_replacement(match):
+            match_text = match.group(0).lower()
+            for field in field_names:
+                if field.lower() == match_text:
+                    return field
+            raise ValueError(f"No replacement found for match: {match_text}")
+        if isinstance(value, str):
+            # If the value is a string, replace field names using regex
+            return field_pattern.sub(find_replacement, value)
+        elif isinstance(value, list):
+            # If the value is a list, apply the replacement to each string in the list
+            return [field_pattern.sub(find_replacement, v) if isinstance(v, str) else v for v in value]
+
     
     def search_and_modify(sub_structure):
         """Recursively searches for the key_to_modify and updates its value."""
@@ -100,17 +116,13 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
                 elif key in keys_to_check and value:
                     #print(f'\n(1)Checking {sub_structure[key]} in key {key}')
                     # Use regex to modify only text in the string that is the field name.
-                    sub_structure[key] = field_pattern.sub(lambda match: next(field for field in field_names if field.lower() == match.group(0).lower()), value)
+                    sub_structure[key] = find_replace_directly(sub_structure[key], field_pattern, field_names)
                     #print(sub_structure[key])
                 elif key in special_list_keys and isinstance(value, list):
-                    print(key)
-                    print(special_list_keys)
-                    print(value)
                     # Modify strings in lists under special_list_keys
                     #print(f'\n(2)Checking {sub_structure[key]} in key {key}')
                     sub_structure[key] = [
-                        field_pattern.sub(lambda match: next(field for field in field_names if field.lower() == match.group(0).lower()), v)
-                        if isinstance(v, str) else v
+                        find_replace_directly(v, field_pattern, field_names)
                         for v in value
                     ]
                     #print(sub_structure[key])
@@ -162,6 +174,7 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
                 search_and_modify(structure)
             if (
                 'datasets' in structure and
+                len(structure['datasets']) == 1 and
                 isinstance(structure['datasets'], list) 
             ):
                 for i in range(len(structure['datasets'])):
