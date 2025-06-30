@@ -162,13 +162,14 @@ def lowercase_fields(data, target_itemid, field_names, unsafe_mode):
                 search_and_modify(structure)
             if (
                 'datasets' in structure and
-                len(structure['datasets']) == 1 and
                 isinstance(structure['datasets'], list) 
             ):
-                if structure['datasets'][0]["dataSource"] and 'itemId' in structure['datasets'][0]["dataSource"].keys():
-                    if structure['datasets'][0]["dataSource"]['itemId'] == target_itemid:
-                        print('Found "datasets" struct, modifying it.')
-                        search_and_modify(structure)
+                for i in range(len(structure['datasets'])):
+                    if 'dataSource' in structure['datasets'][i]:
+                        if structure['datasets'][i]["dataSource"] and 'itemId' in structure['datasets'][i]["dataSource"].keys():
+                            if structure['datasets'][i]["dataSource"]['itemId'] == target_itemid:
+                                print('Found "datasets" struct, modifying it.')
+                                search_and_modify(structure)
             if (
                 'dataSource' in structure and
                 isinstance(structure['dataSource'], dict) and
